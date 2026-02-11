@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹球寻路 - 物理益智游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 20px;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #2c3e50;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            cursor: crosshair;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .tool-selector {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .tool-btn {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+        }
+
+        .tool-btn.active {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 0 15px rgba(245, 87, 108, 0.5);
+        }
+
+        .music-control {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 10px 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 24px;
+            z-index: 1000;
+        }
+
+        .music-control:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .instructions h3 {
+            margin-bottom: 8px;
+            color: #ffd700;
+        }
+
+        .instructions li {
+            margin-left: 20px;
+            margin-bottom: 5px;
+        }
+
+        #message {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 1.3em;
+            font-weight: bold;
+            min-height: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .win {
+            color: #4ade80;
+            animation: pulse 0.5s ease-in-out infinite;
+        }
+
+        .lose {
+            color: #f87171;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div class="music-control" id="musicToggle" title="点击开启/关闭音乐">🎵</div>
+
+    <div class="container">
+        <h1>🎯 弹球寻路</h1>
+        <p class="subtitle">动动脑筋，引导小球进入目标！</p>
+
+        <div class="game-info">
+            <div>关卡：<span id="level">1</span>/5</div>
+            <div>已放置：<span id="placedCount">0</span>/<span id="maxTools">3</span></div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="message"></div>
+
+        <div class="controls">
+            <button id="startBtn">🚀 释放小球</button>
+            <button id="resetBtn">🔄 重置</button>
+            <button id="nextLevelBtn" style="display: none;">➡️ 下一关</button>
+        </div>
+
+        <div class="tool-selector">
+            <button class="tool-btn active" data-tool="platform">📏 挡板</button>
+            <button class="tool-btn" data-tool="bouncer">🔄 弹簧</button>
+            <button class="tool-btn" data-tool="delete">❌ 删除</button>
+        </div>
+
+        <div class="instructions">
+            <h3>📖 游戏说明</h3>
+            <ul>
+                <li>点击画面放置挡板或弹簧，引导小球进入绿色目标</li>
+                <li>每关有限制的道具数量，合理规划路径</li>
+                <li>挡板：小球会沿着挡板滚动</li>
+                <li>弹簧：小球碰到会弹跳加速</li>
+                <li>避开红色障碍物，小心掉出边界！</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // ========== 音频系统 ==========
+        const AudioSystem = {
+            context: null,
+            musicEnabled: false,
+            bgMusicInterval: null,
+
+            init() {
+                this.context = new (window.AudioContext || window.webkitAudioContext)();
+            },
+
+            playTone(frequency, duration, type = 'sine', volume = 0.3) {
+                if (!this.musicEnabled || !this.context) return;
+
+                const oscillator = this.context.createOscillator();
+                const gainNode = this.context.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(this.context.destination);
+
+                oscillator.type = type;
+                oscillator.frequency.value = frequency;
+
+                gainNode.gain.setValueAtTime(volume, this.context.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + duration);
+
+                oscillator.start(this.context.currentTime);
+                oscillator.stop(this.context.currentTime + duration);
+            },
+
+            playChord(frequencies, duration) {
+                frequencies.forEach(freq => this.playTone(freq, duration, 'sine', 0.15));
+            },
+
+            // 放置道具音效
+            placeTool() {
+                this.playTone(523.25, 0.1); // C5
+            },
+
+            // 删除道具音效
+            deleteTool() {
+                this.playTone(392, 0.15); // G4
+            },
+
+            // 释放小球音效
+            launchBall() {
+                this.playTone(659.25, 0.2); // E5
+                setTimeout(() => this.playTone(783.99, 0.2), 100); // G5
+            },
+
+            // 碰撞音效
+            bounce() {
+                this.playTone(880, 0.05, 'square', 0.2); // A5
+            },
+
+            // 弹簧音效
+            spring() {
+                this.playTone(1046.5, 0.1, 'triangle', 0.25); // C6
+                setTimeout(() => this.playTone(1318.5, 0.1, 'triangle', 0.2), 50); // E6
+            },
+
+            // 成功音效
+            win() {
+                const melody = [523.25, 659.25, 783.99, 1046.5]; // C5-E5-G5-C6
+                melody.forEach((freq, i) => {
+                    setTimeout(() => this.playTone(freq, 0.3, 'sine', 0.3), i * 150);
+                });
+            },
+
+            // 失败音效
+            lose() {
+                const melody = [392, 349.23, 293.66]; // G4-F4-D4
+                melody.forEach((freq, i) => {
+                    setTimeout(() => this.playTone(freq, 0.2, 'sawtooth', 0.25), i * 150);
+                });
+            },
+
+            // 背景音乐（动感电子音乐）
+            startBgMusic() {
+                if (!this.musicEnabled) return;
+
+                // 动感的旋律（更快节奏 + 和弦）
+                const melody = [
+                    // 主旋律
+                    [[523.25, 659.25], 0.15, 'square', 0.12], // C5+E5 和弦
+                    [[523.25, 659.25], 0.15, 'square', 0.08],
+                    [[659.25, 783.99], 0.15, 'square', 0.12], // E5+G5 和弦
+                    [[659.25, 783.99], 0.15, 'square', 0.08],
+                    [[587.33, 739.99], 0.15, 'square', 0.12], // D5+F#5 和弦
+                    [[587.33, 739.99], 0.15, 'square', 0.08],
+                    [[659.25, 783.99], 0.3, 'square', 0.14],   // E5+G5 和弦（长）
+                    [[], 0.15, 'square', 0],                   // 休止
+
+                    // 重复段落（高八度）
+                    [[1046.5, 1318.5], 0.15, 'triangle', 0.1], // C6+E6
+                    [[1046.5, 1318.5], 0.15, 'triangle', 0.06],
+                    [[1174.7, 1480], 0.15, 'triangle', 0.1],   // D6+F#6
+                    [[1174.7, 1480], 0.15, 'triangle', 0.06],
+                    [[1318.5, 1568], 0.3, 'triangle', 0.12],   // E6+G6（长）
+                    [[], 0.15, 'triangle', 0],                 // 休止
+                ];
+
+                let index = 0;
+                let bassIndex = 0;
+
+                // Bass鼓点（每拍）
+                const bassPattern = setInterval(() => {
+                    if (this.musicEnabled) {
+                        // 低音鼓
+                        this.playTone(65.41, 0.1, 'sine', 0.2); // C2
+                        bassIndex++;
+
+                        // 每4拍加高音鼓
+                        if (bassIndex % 4 === 2) {
+                            this.playTone(1000, 0.05, 'square', 0.08);
+                        }
+                    }
+                }, 200); // 200ms = 300 BPM
+
+                // 旋律
+                this.bgMusicInterval = setInterval(() => {
+                    if (this.musicEnabled) {
+                        const [freqs, duration, waveType, volume] = melody[index];
+
+                        if (freqs.length > 0) {
+                            // 播放和弦（多个频率）
+                            freqs.forEach(freq => {
+                                this.playTone(freq, duration, waveType, volume);
+                            });
+                        }
+
+                        index = (index + 1) % melody.length;
+                    }
+                }, 150); // 更快的节奏
+
+                // 保存bass模式以便停止
+                this.bassPattern = bassPattern;
+            },
+
+            stopBgMusic() {
+                if (this.bgMusicInterval) {
+                    clearInterval(this.bgMusicInterval);
+                    this.bgMusicInterval = null;
+                }
+                if (this.bassPattern) {
+                    clearInterval(this.bassPattern);
+                    this.bassPattern = null;
+                }
+            },
+
+            toggle() {
+                this.musicEnabled = !this.musicEnabled;
+
+                if (this.musicEnabled) {
+                    if (!this.context) this.init();
+                    this.startBgMusic();
+                    document.getElementById('musicToggle').textContent = '🎵';
+                } else {
+                    this.stopBgMusic();
+                    document.getElementById('musicToggle').textContent = '🔇';
+                }
+            }
+        };
+
+        // 音乐控制按钮
+        document.getElementById('musicToggle').addEventListener('click', () => {
+            AudioSystem.toggle();
+        });
+
+        // ========== 游戏主逻辑 ==========
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const nextLevelBtn = document.getElementById('nextLevelBtn');
+        const message = document.getElementById('message');
+        const levelDisplay = document.getElementById('level');
+        const placedCountDisplay = document.getElementById('placedCount');
+        const maxToolsDisplay = document.getElementById('maxTools');
+
+        // 游戏状态
+        let currentLevel = 1;
+        let gameRunning = false;
+        let gameWon = false;
+        let gameLost = false;
+        let selectedTool = 'platform';
+        let placedTools = [];
+
+        // 小球对象
+        const ball = {
+            x: 100,
+            y: 100,
+            vx: 0,
+            vy: 0,
+            radius: 12,
+            gravity: 0.5,
+            bounce: 0.7,
+            friction: 0.99
+        };
+
+        // 关卡配置（放松难度 - 增加道具数量）
+        const levels = [
+            {
+                name: "新手入门",
+                maxTools: 8,  // 从3增加到8
+                startPos: {x: 100, y: 100},
+                goal: {x: 700, y: 500, width: 60, height: 60},
+                obstacles: [
+                    {x: 300, y: 400, width: 200, height: 20, type: 'deadly'}
+                ],
+                walls: []
+            },
+            {
+                name: "曲折路径",
+                maxTools: 10,  // 从4增加到10
+                startPos: {x: 100, y: 100},
+                goal: {x: 700, y: 50, width: 60, height: 60},
+                obstacles: [
+                    {x: 200, y: 300, width: 400, height: 20, type: 'deadly'},
+                    {x: 400, y: 150, width: 20, height: 150, type: 'deadly'}
+                ],
+                walls: []
+            },
+            {
+                name: "跳跃挑战",
+                maxTools: 12,  // 从5增加到12
+                startPos: {x: 50, y: 500},
+                goal: {x: 700, y: 100, width: 60, height: 60},
+                obstacles: [
+                    {x: 0, y: 550, width: 300, height: 20, type: 'platform'},
+                    {x: 500, y: 400, width: 300, height: 20, type: 'deadly'}
+                ],
+                walls: []
+            },
+            {
+                name: "迷宫探索",
+                maxTools: 15,  // 从6增加到15
+                startPos: {x: 100, y: 50},
+                goal: {x: 700, y: 550, width: 60, height: 60},
+                obstacles: [
+                    {x: 250, y: 0, width: 20, height: 300, type: 'deadly'},
+                    {x: 450, y: 200, width: 20, height: 400, type: 'deadly'},
+                    {x: 0, y: 350, width: 250, height: 20, type: 'deadly'}
+                ],
+                walls: []
+            },
+            {
+                name: "终极考验",
+                maxTools: 20,  // 从7增加到20
+                startPos: {x: 50, y: 50},
+                goal: {x: 720, y: 550, width: 60, height: 40},
+                obstacles: [
+                    {x: 200, y: 200, width: 400, height: 20, type: 'deadly'},
+                    {x: 200, y: 400, width: 400, height: 20, type: 'deadly'},
+                    {x: 300, y: 220, width: 20, height: 180, type: 'deadly'},
+                    {x: 500, y: 220, width: 20, height: 180, type: 'deadly'}
+                ],
+                walls: []
+            }
+        ];
+
+        let currentLevelData = levels[0];
+
+        // 工具选择
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedTool = btn.dataset.tool;
+            });
+        });
+
+        // 画布点击事件
+        canvas.addEventListener('click', (e) => {
+            if (gameRunning) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (selectedTool === 'delete') {
+                // 删除工具
+                const beforeLength = placedTools.length;
+                placedTools = placedTools.filter(tool => {
+                    const dx = x - tool.x;
+                    const dy = y - tool.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    return dist > 30;
+                });
+                if (placedTools.length < beforeLength) {
+                    AudioSystem.deleteTool();
+                }
+            } else if (placedTools.length < currentLevelData.maxTools) {
+                // 放置工具
+                if (selectedTool === 'platform') {
+                    placedTools.push({
+                        type: 'platform',
+                        x: x,
+                        y: y,
+                        width: 100,
+                        height: 10,
+                        angle: 0
+                    });
+                    AudioSystem.placeTool();
+                } else if (selectedTool === 'bouncer') {
+                    placedTools.push({
+                        type: 'bouncer',
+                        x: x,
+                        y: y,
+                        radius: 20
+                    });
+                    AudioSystem.placeTool();
+                }
+            }
+
+            updateDisplay();
+            draw();
+        });
+
+        // 按钮事件
+        startBtn.addEventListener('click', startGame);
+        resetBtn.addEventListener('click', resetLevel);
+        nextLevelBtn.addEventListener('click', nextLevel);
+
+        function startGame() {
+            if (gameRunning) return;
+            gameRunning = true;
+            gameWon = false;
+            gameLost = false;
+            message.textContent = '';
+            message.className = '';
+            startBtn.disabled = true;
+            AudioSystem.launchBall();
+            gameLoop();
+        }
+
+        function resetLevel() {
+            gameRunning = false;
+            gameWon = false;
+            gameLost = false;
+            placedTools = [];
+            ball.x = currentLevelData.startPos.x;
+            ball.y = currentLevelData.startPos.y;
+            ball.vx = 0;
+            ball.vy = 0;
+            message.textContent = '';
+            message.className = '';
+            startBtn.disabled = false;
+            nextLevelBtn.style.display = 'none';
+            updateDisplay();
+            draw();
+        }
+
+        function nextLevel() {
+            if (currentLevel < levels.length) {
+                currentLevel++;
+                loadLevel(currentLevel - 1);
+                resetLevel();
+            }
+        }
+
+        function loadLevel(index) {
+            currentLevelData = levels[index];
+            ball.x = currentLevelData.startPos.x;
+            ball.y = currentLevelData.startPos.y;
+            ball.vx = 0;
+            ball.vy = 0;
+            placedTools = [];
+            updateDisplay();
+            draw();
+        }
+
+        function updateDisplay() {
+            levelDisplay.textContent = currentLevel;
+            placedCountDisplay.textContent = placedTools.length;
+            maxToolsDisplay.textContent = currentLevelData.maxTools;
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // 应用重力
+            ball.vy += ball.gravity;
+
+            // 应用摩擦
+            ball.vx *= ball.friction;
+            ball.vy *= ball.friction;
+
+            // 更新位置
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // 边界碰撞
+            if (ball.x - ball.radius < 0) {
+                ball.x = ball.radius;
+                ball.vx *= -ball.bounce;
+                AudioSystem.bounce();
+            }
+            if (ball.x + ball.radius > canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                ball.vx *= -ball.bounce;
+                AudioSystem.bounce();
+            }
+            if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.vy *= -ball.bounce;
+                AudioSystem.bounce();
+            }
+
+            // 掉出底部
+            if (ball.y - ball.radius > canvas.height) {
+                gameLost = true;
+                gameRunning = false;
+                message.textContent = '💔 小球掉出去了！再试一次吧';
+                message.className = 'lose';
+                startBtn.disabled = false;
+                AudioSystem.lose();
+            }
+
+            // 碰撞检测 - 障碍物
+            currentLevelData.obstacles.forEach(obs => {
+                if (obs.type === 'deadly' && checkRectCollision(ball, obs)) {
+                    gameLost = true;
+                    gameRunning = false;
+                    message.textContent = '💥 撞到障碍物了！';
+                    message.className = 'lose';
+                    startBtn.disabled = false;
+                    AudioSystem.lose();
+                } else if (obs.type === 'platform') {
+                    handlePlatformCollision(ball, obs);
+                }
+            });
+
+            // 碰撞检测 - 玩家放置的工具
+            placedTools.forEach(tool => {
+                if (tool.type === 'platform') {
+                    handlePlatformCollision(ball, tool);
+                } else if (tool.type === 'bouncer') {
+                    handleBouncerCollision(ball, tool);
+                }
+            });
+
+            // 目标检测
+            const goal = currentLevelData.goal;
+            if (ball.x > goal.x && ball.x < goal.x + goal.width &&
+                ball.y > goal.y && ball.y < goal.y + goal.height) {
+                gameWon = true;
+                gameRunning = false;
+                message.textContent = '🎉 成功过关！';
+                message.className = 'win';
+                startBtn.disabled = false;
+                AudioSystem.win();
+                if (currentLevel < levels.length) {
+                    nextLevelBtn.style.display = 'inline-block';
+                } else {
+                    message.textContent = '🏆 恭喜通关所有关卡！';
+                }
+            }
+
+            draw();
+
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function checkRectCollision(ball, rect) {
+            const closestX = Math.max(rect.x, Math.min(ball.x, rect.x + rect.width));
+            const closestY = Math.max(rect.y, Math.min(ball.y, rect.y + rect.height));
+            const dx = ball.x - closestX;
+            const dy = ball.y - closestY;
+            return (dx * dx + dy * dy) < (ball.radius * ball.radius);
+        }
+
+        function handlePlatformCollision(ball, platform) {
+            const closestX = Math.max(platform.x, Math.min(ball.x, platform.x + platform.width));
+            const closestY = Math.max(platform.y, Math.min(ball.y, platform.y + platform.height));
+            const dx = ball.x - closestX;
+            const dy = ball.y - closestY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < ball.radius) {
+                // 推出小球
+                const angle = Math.atan2(dy, dx);
+                ball.x = closestX + Math.cos(angle) * ball.radius;
+                ball.y = closestY + Math.sin(angle) * ball.radius;
+
+                // 反弹
+                if (Math.abs(dy) > Math.abs(dx)) {
+                    ball.vy *= -ball.bounce;
+                } else {
+                    ball.vx *= -ball.bounce;
+                }
+            }
+        }
+
+        function handleBouncerCollision(ball, bouncer) {
+            const dx = ball.x - bouncer.x;
+            const dy = ball.y - bouncer.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < ball.radius + bouncer.radius) {
+                // 弹跳效果
+                const angle = Math.atan2(dy, dx);
+                ball.vx = Math.cos(angle) * 15;
+                ball.vy = Math.sin(angle) * 15;
+
+                // 推出小球
+                ball.x = bouncer.x + Math.cos(angle) * (ball.radius + bouncer.radius);
+                ball.y = bouncer.y + Math.sin(angle) * (ball.radius + bouncer.radius);
+
+                // 弹簧音效
+                AudioSystem.spring();
+            }
+        }
+
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // 绘制目标
+            const goal = currentLevelData.goal;
+            ctx.fillStyle = '#4ade80';
+            ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(goal.x, goal.y, goal.width, goal.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🎯', goal.x + goal.width / 2, goal.y + goal.height / 2);
+
+            // 绘制障碍物
+            currentLevelData.obstacles.forEach(obs => {
+                if (obs.type === 'deadly') {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.strokeStyle = '#dc2626';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+                } else if (obs.type === 'platform') {
+                    ctx.fillStyle = '#8b5cf6';
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                }
+            });
+
+            // 绘制玩家放置的工具
+            placedTools.forEach(tool => {
+                if (tool.type === 'platform') {
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.fillRect(tool.x - tool.width / 2, tool.y - tool.height / 2, tool.width, tool.height);
+                    ctx.strokeStyle = '#2563eb';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(tool.x - tool.width / 2, tool.y - tool.height / 2, tool.width, tool.height);
+                } else if (tool.type === 'bouncer') {
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.beginPath();
+                    ctx.arc(tool.x, tool.y, tool.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#d97706';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    // 弹簧纹理
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    for (let i = 0; i < 3; i++) {
+                        ctx.beginPath();
+                        ctx.arc(tool.x, tool.y, tool.radius * (0.3 + i * 0.25), 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+            });
+
+            // 绘制起点
+            const start = currentLevelData.startPos;
+            if (!gameRunning && !gameWon && !gameLost) {
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.arc(start.x, start.y, ball.radius + 5, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 绘制小球
+            const gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 2, ball.x, ball.y, ball.radius);
+            gradient.addColorStop(0, '#fbbf24');
+            gradient.addColorStop(1, '#f59e0b');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 绘制关卡名称
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(currentLevelData.name, 10, 10);
+        }
+
+        // 初始化
+        loadLevel(0);
+        draw();
+    </script>
+</body>
+</html>
